@@ -17,4 +17,4 @@ class ComplianceResponse(BaseModel):
 class AssessmentRequest(BaseModel):
     security_domain: str
     risk_level: int
-    description: 
+    description: str
