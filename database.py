@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, Column, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from moels import Base
+from models import Base
 
 DATABASE_URL = "postgresql://postgres:Aightson1!@db.gwandgydnaeommvslqzo.supabase.co:5432/postgres"  
 
