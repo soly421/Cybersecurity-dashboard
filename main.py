@@ -36,4 +36,37 @@ def generate_nist_assessment(request: AssessmentRequest, db: Session = Depends(g
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a cybersecurity expert following NIST CSF guidelines
+                {"role": "system", "content": "You are a cybersecurity expert following NIST CSF guidelines."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        assessment_result = response["choices"][0]["message"]["content"]
+        return {"nist_assessment": assessment_result}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM Error: {str(e)}")
+
+# Fetch Compliance Data
+@app.get("/compliance/")
+def get_compliance_data(db: Session = Depends(get_db)):
+    return db.query(ComplianceData).all()
+
+# User Registration
+@app.post("/register/")
+def register_user(username: str, password: str, db: Session = Depends(get_db)):
+    hashed_password = get_password_hash(password)
+    user = User(username=username, hashed_password=hashed_password)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return {"message": "User registered successfully"}
+
+# User Login
+@app.post("/login/")
+def login_user(username: str, password: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == username).first()
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Invalid credentials")
+    
+    token = create_access_token({"sub": user.username})
+    return {"access_token": token, "token_type": "bearer"}
