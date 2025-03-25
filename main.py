@@ -2,7 +2,6 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import engine, SessionLocal, Base, ComplianceData
 from schemas import ComplianceRequest, AssessmentRequest
-from security import get_password_hash, verify_password, create_access_token
 import openai
 import os
 
