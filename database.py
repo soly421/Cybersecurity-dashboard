@@ -6,7 +6,7 @@ from models import Base
 DATABASE_URL = "postgresql://postgres:Aightson1!@db.gwandgydnaeommvslqzo.supabase.co:5432/postgres"  
 
 # SQLAlchemy setup
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
