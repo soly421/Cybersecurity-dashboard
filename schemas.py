@@ -13,3 +13,8 @@ class ComplianceResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class AssessmentRequest(BaseModel):
+    security_domain: str
+    risk_level: int
+    description: 
