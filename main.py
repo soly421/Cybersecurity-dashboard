@@ -1,68 +1,110 @@
-from fastapi import FastAPI, Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel
-import openai
 import os
+import openai
+import requests
+import json
+from fastapi import FastAPI, HTTPException, Depends
+from pydantic import BaseModel
 from dotenv import load_dotenv
-from typing import Dict
+from typing import Dict, Any
+import uvicorn
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from database import Base, ComplianceData, ComplianceReport
 
 # Load environment variables
 load_dotenv()
 
-# Initialize FastAPI
-app = FastAPI(title="Cybersecurity Program Management API")
+# Initialize OpenAI API key
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Authentication Setup
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+# Database setup
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Mock user database
-users_db = {
-    "admin": {"username": "admin", "password": "securepass", "role": "admin"}
-}
+# Initialize FastAPI app
+app = FastAPI()
 
-# Pydantic Models
-class UserLogin(BaseModel):
-    username: str
-    password: str
+# Pydantic models for incoming data validation
+class ComplianceRequest(BaseModel):
+    organization_id: str
+    standards: Dict[str, Any]
 
-class NISTAssessmentRequest(BaseModel):
-    controls: Dict[str, str]  # Control areas mapped to responses
+# Helper functions to interact with NIST, ISO APIs
+def fetch_compliance_data_from_nist(organization_id: str):
+    # Placeholder API call - Replace with actual NIST API call
+    return {"nist_csf": "Level 3", "nist_800_53": True, "nist_ai_rmf_compliance": True}
 
-class AssessmentResult(BaseModel):
-    maturity_score: float
-    recommendations: str
+def fetch_compliance_data_from_iso(organization_id: str):
+    # Placeholder API call - Replace with actual ISO API call
+    return {"iso27001_compliance": True}
 
-# Token endpoint
-@app.post("/token")
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = users_db.get(form_data.username)
-    if not user or user["password"] != form_data.password:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    return {"access_token": form_data.username, "token_type": "bearer"}
+# Generate compliance report using OpenAI
+def generate_compliance_report(data: Dict[str, Any]) -> str:
+    prompt = f"""
+    Generate a detailed compliance report based on the following data:
+    NIST CSF Level: {data['nist_csf']}
+    NIST 800-53 Compliance: {data['nist_800_53']}
+    ISO 27001 Compliance: {data['iso27001_compliance']}
+    NIST AI RMF Compliance: {data['nist_ai_rmf_compliance']}
 
-# Secure route example
-@app.get("/secure-data")
-async def get_secure_data(token: str = Depends(oauth2_scheme)):
-    return {"message": "This is a secure endpoint", "user": token}
+    The report should be suitable for senior executive audiences and focus on areas that need attention.
+    """
 
-# NIST CSF Assessment
-@app.post("/nist-assessment", response_model=AssessmentResult)
-async def nist_assessment(request: NISTAssessmentRequest):
-    openai.api_key = os.getenv("OPENAI_API_KEY")
+    try:
+        response = openai.Completion.create(
+            engine="gpt-4",  # Ensure to use the latest engine (e.g., GPT-4)
+            prompt=prompt,
+            max_tokens=1500,
+            temperature=0.5,
+        )
+        return response.choices[0].text.strip()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
 
-    prompt = f"Evaluate the following NIST CSF controls:\n{request.controls}"
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "system", "content": "You are an expert in cybersecurity compliance."},
-                  {"role": "user", "content": prompt}]
-    )
+# Endpoint for generating a compliance report
+@app.post("/generate_report/")
+async def generate_report(request: ComplianceRequest, db: Session = Depends(get_db)):
+    try:
+        # Fetching compliance data from external sources
+        nist_data = fetch_compliance_data_from_nist(request.organization_id)
+        iso_data = fetch_compliance_data_from_iso(request.organization_id)
+        
+        # Combine the compliance data from different standards
+        combined_data = {
+            "nist_csf": nist_data["nist_csf"],
+            "nist_800_53": nist_data["nist_800_53"],
+            "iso27001_compliance": iso_data["iso27001_compliance"],
+            "nist_ai_rmf_compliance": nist_data["nist_ai_rmf_compliance"]
+        }
 
-    return AssessmentResult(
-        maturity_score=85.0,  # Example score
-        recommendations=response["choices"][0]["message"]["content"]
-    )
+        # Generate the compliance report using OpenAI
+        report = generate_compliance_report(combined_data)
 
-# Root endpoint
-@app.get("/")
-def home():
-    return {"message": "Cybersecurity Program API is running!"}
+        # Store the report in the database (for historical records and audit)
+        new_report = ComplianceReport(
+            organization_id=request.organization_id,
+            report=report,
+            standards=json.dumps(combined_data)
+        )
+        db.add(new_report)
+        db.commit()
+
+        return {"status": "success", "report": report}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating compliance report: {str(e)}")
+
+# Database dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Initialize the database (create tables)
+Base.metadata.create_all(bind=engine)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
