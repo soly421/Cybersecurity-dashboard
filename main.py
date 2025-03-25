@@ -1,13 +1,12 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
 import openai
 import psycopg2
 import os
 
 # Initialize FastAPI app
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
 app = FastAPI(
     title="Cybersecurity API",
     version="1.0",
@@ -25,12 +24,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Ensure environment variables are set
+required_env_vars = ["DB_NAME", "DB_USER", "DB_PASS", "DB_HOST", "DB_PORT", "OPENAI_API_KEY"]
+for var in required_env_vars:
+    if not os.getenv(var):
+        raise ValueError(f"Missing required environment variable: {var}")
+
+# Custom OpenAPI Schema to fix empty /docs issue
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title="Cybersecurity API",
+        version="1.0",
+        description="API for cybersecurity program management",
+        routes=app.routes,
+    )
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
+# Root endpoint
 @app.get("/")
 def home():
     return {"message": "Cybersecurity API is running!"}
 
-
-# Database connection (PostgreSQL)
+# Database connection function
 def get_db_connection():
     try:
         return psycopg2.connect(
@@ -41,52 +61,4 @@ def get_db_connection():
             port=os.getenv("DB_PORT")
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database connection error: {str(e)}")
-
-# Pydantic models
-class CyberSecurityMetric(BaseModel):
-    name: str
-    value: float
-    category: str
-
-class MaturityAssessmentRequest(BaseModel):
-    program_data: str
-
-# API Endpoints
-@app.post("/metrics/add")
-def add_metric(metric: CyberSecurityMetric):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO metrics (name, value, category) VALUES (%s, %s, %s)", 
-        (metric.name, metric.value, metric.category)
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
-    return {"message": "Metric added successfully"}
-
-@app.get("/metrics")
-def get_metrics():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT name, value, category FROM metrics")
-    metrics = cur.fetchall()
-    cur.close()
-    conn.close()
-    return {"metrics": [{"name": m[0], "value": m[1], "category": m[2]} for m in metrics]}
-
-@app.post("/assess")
-def assess_maturity(request: MaturityAssessmentRequest):
-    response = openai.ChatCompletion.create(
-        model="gpt-4", 
-        messages=[
-            {"role": "system", "content": "Evaluate the cybersecurity program based on NIST CSF."},
-            {"role": "user", "content": request.program_data}
-        ]
-    )
-    return {"assessment": response["choices"][0]["message"]["content"]}
-
-@app.get("/")
-def home():
-    return {"message": "Cybersecurity API is running!"}
+        raise
