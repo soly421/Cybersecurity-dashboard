@@ -22,5 +22,5 @@ class ComplianceReport(Base):
     __tablename__ = "compliance_reports"
 
     id = Column(Integer, primary_key=True, index=True)
-    report_name = Column_
+    report_name = Column
 
