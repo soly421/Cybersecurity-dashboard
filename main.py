@@ -5,7 +5,30 @@ import psycopg2
 import os
 
 # Initialize FastAPI app
-app = FastAPI()
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(
+    title="Cybersecurity API",
+    version="1.0",
+    docs_url="/docs",  # Enables Swagger UI
+    redoc_url="/redoc",  # Enables alternative API docs
+    openapi_url="/openapi.json"  # Ensures OpenAPI schema is available
+)
+
+# Fix CORS issues for accessing the API from the browser
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+def home():
+    return {"message": "Cybersecurity API is running!"}
+
 
 # Database connection (PostgreSQL)
 def get_db_connection():
