@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
 import openai
@@ -10,13 +10,16 @@ app = FastAPI()
 
 # Database connection (PostgreSQL)
 def get_db_connection():
-    return psycopg2.connect(
-        dbname=os.getenv("DB_NAME"), 
-        user=os.getenv("DB_USER"), 
-        password=os.getenv("DB_PASS"), 
-        host=os.getenv("DB_HOST"), 
-        port=os.getenv("DB_PORT")
-    )
+    try:
+        return psycopg2.connect(
+            dbname=os.getenv("DB_NAME"), 
+            user=os.getenv("DB_USER"), 
+            password=os.getenv("DB_PASS"), 
+            host=os.getenv("DB_HOST"), 
+            port=os.getenv("DB_PORT")
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database connection error: {str(e)}")
 
 # Pydantic models
 class CyberSecurityMetric(BaseModel):
@@ -47,11 +50,16 @@ def get_metrics():
     metrics = cur.fetchall()
     cur.close()
     conn.close()
-    return {"metrics": metrics}
+    return {"metrics": [{"name": m[0], "value": m[1], "category": m[2]} for m in metrics]}
 
 @app.post("/assess")
 def assess_maturity(request: MaturityAssessmentRequest):
     response = openai.ChatCompletion.create(
         model="gpt-4", 
         messages=[{"role": "system", "content": "Evaluate the cybersecurity program based on NIST CSF."},
-                  {"role": "user", "content": request
+                  {"role": "user", "content": request.program_data}]
+    )
+    return {"assessment": response["choices"][0]["message"]["content"]}
+
+@app.get("/")
+def home
