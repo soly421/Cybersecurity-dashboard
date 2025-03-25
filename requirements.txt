@@ -1,6 +1,9 @@
 fastapi
 uvicorn
 psycopg2
-pydantic
 openai
 python-dotenv
+requests
+pydantic
+python-jose
+fastapi-limiter
