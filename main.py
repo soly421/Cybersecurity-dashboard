@@ -9,6 +9,7 @@ from typing import Dict, Any
 import uvicorn
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from database import get_db 
 from database import Base, ComplianceData, ComplianceReport
 
 # Load environment variables
